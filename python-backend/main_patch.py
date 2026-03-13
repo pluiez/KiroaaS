@@ -4,7 +4,7 @@
 Patched Kiro Gateway entry point.
 
 This entry point monkey patches Enterprise device registration loading so
-`ENTERPRISE_DEVICE_REG_PATH` can override the default hash-based file path.
+`ENTERPRISE_DEVICE_REG_DIR` can override the default SSO cache directory.
 """
 
 import copy
@@ -19,7 +19,7 @@ from kiro.auth import KiroAuthManager
 from kiro.config import _get_raw_env_value, _warn_timeout_configuration
 
 
-ENTERPRISE_DEVICE_REG_PATH_ENV = "ENTERPRISE_DEVICE_REG_PATH"
+ENTERPRISE_DEVICE_REG_DIR_ENV = "ENTERPRISE_DEVICE_REG_DIR"
 
 # Re-export for uvicorn log config compatibility when this file is __main__.
 InterceptHandler = main.InterceptHandler
@@ -27,14 +27,18 @@ app = main.app
 
 
 def _resolve_enterprise_device_reg_path(client_id_hash: str) -> Path:
-    raw_env_path = _get_raw_env_value(ENTERPRISE_DEVICE_REG_PATH_ENV)
-    if raw_env_path is None:
-        raw_env_path = os.getenv(ENTERPRISE_DEVICE_REG_PATH_ENV)
+    raw_env_dir = _get_raw_env_value(ENTERPRISE_DEVICE_REG_DIR_ENV)
+    if raw_env_dir is None:
+        raw_env_dir = os.getenv(ENTERPRISE_DEVICE_REG_DIR_ENV)
 
-    if raw_env_path is not None and raw_env_path.strip():
-        return Path(raw_env_path).expanduser()
+    if raw_env_dir is not None and raw_env_dir.strip():
+        logger.info(f"Using enterprise device reg directory from {ENTERPRISE_DEVICE_REG_DIR_ENV}")
+        base_dir = Path(raw_env_dir).expanduser()
+    else:
+        logger.info("Using default enterprise device reg directory")
+        base_dir = Path.home() / ".aws" / "sso" / "cache"
 
-    return Path.home() / ".aws" / "sso" / "cache" / f"{client_id_hash}.json"
+    return base_dir / f"{client_id_hash}.json"
 
 
 def _patched_load_enterprise_device_registration(
